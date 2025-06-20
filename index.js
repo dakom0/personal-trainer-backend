@@ -49,7 +49,7 @@ app.get('/api/bookings', requireAuth, (req, res) => {
 });
 
 app.delete('/api/bookings/:id', requireAuth, (req, res) => {
-  db.run('DELETE FROM bookings WHERE id = ?', [req.params.id], function (err) {
+  db.run('DELETE FROM bookings WHERE id = $1', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ deleted: this.changes });
   });
@@ -60,7 +60,7 @@ app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   if (!status) return res.status(400).json({ error: 'Status is required' });
   db.run(
-    'UPDATE bookings SET status = ? WHERE id = ?',
+    'UPDATE bookings SET status = $1 WHERE id = $2',
     [status, req.params.id],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -78,7 +78,7 @@ app.post('/api/bookings', requireClientAuth, (req, res) => {
   console.log('Booking data:', { name, email, date, time, message, phone, userId });
 
   db.run(
-    'INSERT INTO bookings (name, email, date, time, message, phone, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO bookings (name, email, date, time, message, phone, status, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
     [name, email, date, time, message, phone, 'pending', userId],
     function (err) {
       if (err) {
@@ -129,8 +129,11 @@ app.post('/api/client/register', async (req, res) => {
 // --- PUBLIC: USER LOGIN ---
 app.post('/api/client/login', (req, res) => {
   const { email, password } = req.body;
-  db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-    if (err || !user) return res.status(401).json({ error: 'Invalid credentials' });
+  db.get('SELECT * FROM users WHERE email = $1', [email], async (err, user) => {
+    if (err || !user) {
+      console.error('Login error or user not found:', err);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
     const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '8h' });
@@ -161,7 +164,7 @@ app.post('/api/client/bookings', requireClientAuth, (req, res) => {
   console.log('Booking data:', { name, email, date, time, message, phone, userId });
 
   db.run(
-    'INSERT INTO bookings (name, email, date, time, message, phone, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO bookings (name, email, date, time, message, phone, status, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
     [name, email, date, time, message, phone, 'pending', userId],
     function (err) {
       if (err) {
@@ -184,7 +187,7 @@ app.post('/api/client/bookings', requireClientAuth, (req, res) => {
 app.get('/api/client/bookings', requireClientAuth, (req, res) => {
   console.log('Fetching bookings for user:', req.user.userId);
 
-  db.all('SELECT * FROM bookings WHERE user_id = ?', [req.user.userId], (err, rows) => {
+  db.all('SELECT * FROM bookings WHERE user_id = $1', [req.user.userId], (err, rows) => {
     if (err) {
       console.error('Error fetching client bookings:', err);
       return res.status(500).json({ error: err.message });
@@ -198,7 +201,7 @@ app.get('/api/client/bookings', requireClientAuth, (req, res) => {
 app.put('/api/client/bookings/:id', requireClientAuth, (req, res) => {
   const { date, time, message, phone } = req.body;
   db.run(
-    'UPDATE bookings SET date = ?, time = ?, message = ?, phone = ? WHERE id = ? AND user_id = ?',
+    'UPDATE bookings SET date = $1, time = $2, message = $3, phone = $4 WHERE id = $5 AND user_id = $6',
     [date, time, message, phone, req.params.id, req.user.userId],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -209,7 +212,7 @@ app.put('/api/client/bookings/:id', requireClientAuth, (req, res) => {
 
 // Delete booking for client
 app.delete('/api/client/bookings/:id', requireClientAuth, (req, res) => {
-  db.run('DELETE FROM bookings WHERE id = ? AND user_id = ?', [req.params.id, req.user.userId], function (err) {
+  db.run('DELETE FROM bookings WHERE id = $1 AND user_id = $2', [req.params.id, req.user.userId], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ deleted: this.changes });
   });
