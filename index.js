@@ -10,29 +10,30 @@ const { sendBookingNotification } = require('./mailer');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Handle JSON body parsing before anything else
+app.use(express.json());
+
 // Whitelist of allowed origins
 const allowedOrigins = [
   'https://trainerpr0.netlify.app',
-  'http://localhost:3000', // Assuming your local frontend runs on port 3000
+  'http://localhost:3000',
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    // Allow requests with no origin (like mobile apps or curl requests) or from whitelisted origins
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
   },
+  credentials: true,
+  optionsSuccessStatus: 200 // For legacy browser support
 };
 
-// First, handle preflight requests for all routes
-app.options('*', cors(corsOptions)); // Enable pre-flight
-
+// Enable CORS for all routes
 app.use(cors(corsOptions));
-app.use(express.json());
 
 // --- AUTH MIDDLEWARE ---
 function requireAuth(req, res, next) {
