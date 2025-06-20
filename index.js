@@ -51,15 +51,28 @@ function requireAuth(req, res, next) {
 // --- LOGIN ENDPOINT ---
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+
+  // --- Defensive checks for environment variables ---
+  if (!process.env.DASHBOARD_USER || !process.env.DASHBOARD_PASS_HASH || !process.env.JWT_SECRET) {
+    console.error('FATAL: Missing one or more required environment variables for trainer login.');
+    return res.status(500).json({ error: 'Server configuration error.' });
+  }
+
   if (username !== process.env.DASHBOARD_USER) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  const valid = await bcrypt.compare(password, process.env.DASHBOARD_PASS_HASH);
-  if (!valid) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+
+  try {
+    const valid = await bcrypt.compare(password, process.env.DASHBOARD_PASS_HASH);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token });
+  } catch (error) {
+    console.error('Error during login process:', error);
+    return res.status(500).json({ error: 'An internal server error occurred during login.' });
   }
-  const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token });
 });
 
 // --- BOOKINGS ENDPOINTS (PROTECTED) ---
