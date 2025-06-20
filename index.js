@@ -58,16 +58,6 @@ function requireAuth(req, res, next) {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
-  // TEMPORARY DEBUGGING
-  console.log(`Login attempt for user: '${username}'`);
-  console.log(`Comparing with stored user: '${process.env.DASHBOARD_USER}'`);
-  if (username !== process.env.DASHBOARD_USER) {
-    console.log('Username does not match.');
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-  console.log('Username matches. Comparing password...');
-  // END TEMPORARY DEBUGGING
-
   // --- Defensive checks for environment variables ---
   if (!process.env.DASHBOARD_USER || !process.env.DASHBOARD_PASS_HASH || !process.env.JWT_SECRET) {
     console.error('FATAL: Missing one or more required environment variables for trainer login.');
@@ -81,9 +71,6 @@ app.post('/api/login', async (req, res) => {
   try {
     const valid = await bcrypt.compare(password, process.env.DASHBOARD_PASS_HASH);
     if (!valid) {
-      // TEMPORARY DEBUGGING
-      console.log('Password comparison failed.');
-      // END TEMPORARY DEBUGGING
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '8h' });
