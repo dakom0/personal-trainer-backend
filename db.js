@@ -1,84 +1,63 @@
 const { Pool } = require('pg');
 const sqlite3 = require('sqlite3').verbose();
 
-const isProduction = process.env.NODE_ENV === 'production';
-
 let db;
-let query;
-let get;
-let all;
-let run;
 
-if (isProduction) {
-  // --- Production: PostgreSQL on Heroku ---
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is not set for production.');
-  }
-
+// Check if we are in the Heroku environment by looking for the DATABASE_URL
+if (process.env.DATABASE_URL) {
+  // Use PostgreSQL on Heroku
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-      rejectUnauthorized: false,
-    },
+      rejectUnauthorized: false // Required for Heroku Postgres
+    }
   });
 
-  console.log('Connected to the PostgreSQL database.');
+  pool.connect(err => {
+    if (err) {
+      console.error('Connection error', err.stack);
+    } else {
+      console.log('Connected to the PostgreSQL database.');
+    }
+  });
 
-  // Compatibility layer to mimic node-sqlite3 API
-  query = (sql, params = []) => pool.query(sql, params);
-
-  get = async (sql, params = [], callback) => {
-    try {
-      const result = await pool.query(sql, params);
-      callback(null, result.rows[0]);
-    } catch (err) {
-      callback(err, null);
+  // Export an object with the same interface as sqlite3
+  db = {
+    // The 'run' method for INSERT, UPDATE, DELETE
+    run: (sql, params = [], callback) => {
+      // The `run` callback in sqlite3 is function(err), where `this` holds metadata.
+      // We can't perfectly replicate `this.lastID` for postgres without RETURNING id,
+      // but we can provide rowCount for `this.changes`.
+      pool.query(sql, params, (err, result) => {
+        const context = {
+          changes: result ? result.rowCount : 0
+        };
+        // The original callback is bound to the context object.
+        callback.call(context, err);
+      });
+    },
+    // The 'all' method for SELECT queries that return multiple rows
+    all: (sql, params = [], callback) => {
+      pool.query(sql, params, (err, result) => {
+        callback(err, result ? result.rows : []);
+      });
+    },
+    // The 'get' method for SELECT queries that return a single row
+    get: (sql, params = [], callback) => {
+      pool.query(sql, params, (err, result) => {
+        callback(err, result && result.rows.length > 0 ? result.rows[0] : undefined);
+      });
     }
   };
-
-  all = async (sql, params = [], callback) => {
-    try {
-      const result = await pool.query(sql, params);
-      callback(null, result.rows);
-    } catch (err) {
-      callback(err, null);
-    }
-  };
-
-  run = async (sql, params = [], callback) => {
-    try {
-      // For INSERT, we need to return the lastID. We assume the table has a primary key named 'id'.
-      const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
-      const querySql = isInsert ? `${sql} RETURNING id` : sql;
-
-      const result = await pool.query(querySql, params);
-
-      // Mimic sqlite3's 'this' context for the callback
-      const context = {
-        lastID: result.rows[0]?.id || null,
-        changes: result.rowCount,
-      };
-
-      // The callback in sqlite3 is often called as function(err) { ... }, so 'this' is bound.
-      callback.call(context, null);
-
-    } catch (err) {
-      callback.call({ lastID: null, changes: 0 }, err);
-    }
-  };
-
-  db = { query, get, all, run };
 
 } else {
-  // --- Development: SQLite ---
-  const sqliteDb = new sqlite3.Database('./bookings.db', (err) => {
+  // Use SQLite for local development
+  db = new sqlite3.Database('./bookings.db', (err) => {
     if (err) {
       console.error(err.message);
     }
     console.log('Connected to the local SQLite database.');
   });
-
-  db = sqliteDb; // Use the original sqlite3 object in development
 }
 
 module.exports = db;
