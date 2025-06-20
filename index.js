@@ -100,15 +100,30 @@ app.post('/api/bookings', requireClientAuth, (req, res) => {
 // --- PUBLIC: USER REGISTRATION ---
 app.post('/api/client/register', async (req, res) => {
   const { email, password, name } = req.body;
-  const password_hash = await bcrypt.hash(password, 10);
-  db.run(
-    'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)',
-    [email, password_hash, name],
-    function (err) {
-      if (err) return res.status(400).json({ error: 'Email already in use' });
-      res.json({ id: this.lastID });
-    }
-  );
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: 'Email, password, and name are required.' });
+  }
+
+  try {
+    const password_hash = await bcrypt.hash(password, 10);
+    db.run(
+      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3)',
+      [email, password_hash, name],
+      function (err) {
+        if (err) {
+          console.error("REGISTRATION ERROR:", err);
+          if (err.code === '23505') {
+            return res.status(400).json({ error: 'Email already in use.' });
+          }
+          return res.status(500).json({ error: 'An error occurred during registration.' });
+        }
+        res.status(201).json({ id: this.lastID });
+      }
+    );
+  } catch (error) {
+    console.error("Server error during registration:", error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
+  }
 });
 
 // --- PUBLIC: USER LOGIN ---
