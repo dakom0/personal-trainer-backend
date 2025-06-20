@@ -275,6 +275,15 @@ app.get('/api/debug/bookings', (req, res) => {
   });
 });
 
+// --- PUBLIC: GET AVAILABLE BOOKING TIMES FOR A GIVEN DATE ---
+app.get('/api/bookings/available-times/:date', (req, res) => {
+  const { date } = req.params;
+  db.all('SELECT time FROM bookings WHERE date = $1', [date], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
