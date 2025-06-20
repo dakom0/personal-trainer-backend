@@ -287,3 +287,5 @@ app.get('/api/bookings/available-times/:date', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+// Force new build
